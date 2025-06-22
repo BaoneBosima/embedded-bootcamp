@@ -19,6 +19,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -34,6 +36,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define Min_Count 1000
+#define Max_Count 2000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,7 +48,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint16_t adc_value;
+uint16_t timer_value;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,6 +60,38 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+//get ADc value
+  uint16_t Read_ADC(void) {
+	  //release select line
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+
+	  //get the bytes of data
+	  uint8_t transmit_buffer[3] = { 0xC0, 0x00, 0x00 };// only 1100 0000 will transmit. the rest are zero
+
+	  uint8_t receive_buffer[3]  = { 0 };
+	  HAL_SPI_TransmitReceive(&hspi1, transmit_buffer,receive_buffer,sizeof(transmit_buffer),HAL_MAX_DELAY);
+
+	  //select line go back to being idle
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+
+	    // 4) Extract 10-bit result (0…1023)
+
+	    //extract bit 8 and 9
+	    uint8_t topbits = receive_buffer[1] & 0x03;
+
+	    //shift them to 16 bit positions
+	    uint16_t highpart = ((uint16_t)topbits) << 8;
+
+	   // Take the entire second byte as the low 8 bits (bits 7–0):
+	    uint16_t lowpart = receive_buffer[2];
+	    //join them with bitwise OR
+	     return highpart | lowpart;
+
+}
+  //change ADC values to SPI values
+  static inline uint16_t ADCtoPWM(uint16_t adc_val) {
+      return Min_Count+ ((uint32_t)adc_val * (Max_Count - Min_Count)) / 1023;
+  }
 
 /* USER CODE END 0 */
 
@@ -64,6 +101,7 @@ void SystemClock_Config(void);
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -87,8 +125,10 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -98,6 +138,15 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  // read aADc value
+	  adc_value   = Read_ADC();
+
+	  // Map that 0–1023 value into 1000–2000 ticks
+	    timer_value = ADCtoPWM(adc_value);
+
+	   //  Update TIM1_CH4 with the new compare value
+	      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, timer_value);
+	      HAL_Delay(10);
   }
   /* USER CODE END 3 */
 }
@@ -122,6 +171,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -177,5 +227,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
