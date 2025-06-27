@@ -66,10 +66,14 @@ void SystemClock_Config(void);
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 
 	  //get the bytes of data
-	  uint8_t transmit_buffer[3] = { 0xC0, 0x00, 0x00 };// only 1100 0000 will transmit. the rest are zero
+	  // 0x01- start bit
+	  //0x80- I am choosing single ended
+	  // 0x00- Dont care bits
+	  uint8_t transmit_buffer[3] = { 0x01, 0x80, 0x00 };
 
 	  uint8_t receive_buffer[3]  = { 0 };
-	  HAL_SPI_TransmitReceive(&hspi1, transmit_buffer,receive_buffer,sizeof(transmit_buffer),HAL_MAX_DELAY);
+
+	  HAL_SPI_TransmitReceive(&hspi1, transmit_buffer,receive_buffer,3 ,HAL_MAX_DELAY);
 
 	  //select line go back to being idle
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
